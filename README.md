@@ -1,6 +1,4 @@
-# 🏆 Trojan Trading Analytics - Solana Memecoin Trading Microservice
-
-**Bounty Submission for Trojan Trading Hackathon**
+# Solana Memecoin Trading Microservice
 
 A high-performance, real-time microservice for Solana memecoin trading analytics that delivers comprehensive token metrics through REST APIs and WebSocket streams.
 
