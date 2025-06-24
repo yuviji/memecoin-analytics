@@ -1,0 +1,11 @@
+-r base.txt
+
+# Production monitoring and security
+gunicorn==21.2.0
+sentry-sdk[fastapi]==1.38.0
+
+# Security
+cryptography==41.0.7
+
+# Performance monitoring
+psutil==5.9.6 

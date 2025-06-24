@@ -1,0 +1,5 @@
+# Trojan Trading Analytics - Production Requirements
+# This is the main requirements file for production deployment
+
+# Include base requirements
+-r requirements/base.txt 

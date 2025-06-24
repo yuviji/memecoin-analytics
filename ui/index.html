@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trojan Trading Analytics - Memecoin Analytics Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .metric-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        .error {
+            border-left: 4px solid #ef4444;
+            background-color: #fef2f2;
+        }
+        .success {
+            border-left: 4px solid #10b981;
+            background-color: #f0fdf4;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+        <!-- Header -->
+    <header class="gradient-bg text-white py-6 shadow-lg">
+        <div class="container mx-auto px-4">
+            <div class="flex items-center justify-between">
+                    <div>
+                    <h1 class="text-3xl font-bold">🏛️ Trojan Trading Analytics</h1>
+                    <p class="text-blue-100 mt-1">Real-time Memecoin Trading Insights</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center">
+                        <div id="ws-status-dot" class="w-3 h-3 rounded-full mr-2 bg-yellow-400"></div>
+                        <span id="ws-status-text" class="text-sm">WebSocket Offline</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto px-4 py-8">
+        <!-- Token Input Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">🔍 Analyze Token</h2>
+            <form id="token-form" class="mb-4">
+                <div class="flex space-x-4 mb-4">
+                <input 
+                    type="text" 
+                        id="token-address" 
+                        placeholder="Enter Solana token mint address (e.g., So11111111111111111111111111111111111111112)"
+                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                <button 
+                        type="submit"
+                        id="analyze-btn"
+                        class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Analyze
+                    </button>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <label for="max-accounts" class="text-sm font-medium text-gray-700">
+                        Max accounts to monitor:
+                    </label>
+                    <input 
+                        type="number" 
+                        id="max-accounts" 
+                        min="2" 
+                        max="15" 
+                        value="15"
+                        class="w-20 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                        title="Number of largest token holder accounts to monitor for real-time updates (2-15)"
+                    />
+                    <span class="text-xs text-gray-500">
+                        (2-15 accounts for real-time holder updates)
+                    </span>
+                </div>
+            </form>
+
+            <!-- Sample Tokens -->
+            <div class="mb-4">
+                <h3 class="text-sm font-medium text-gray-700 mb-2">Sample Tokens:</h3>
+                <div class="flex flex-wrap gap-2">
+                    <button class="sample-token px-3 py-1 bg-gray-200 text-gray-700 rounded-full text-sm hover:bg-gray-300" 
+                            data-address="So11111111111111111111111111111111111111112" data-symbol="SOL">
+                        SOL - Solana
+                    </button>
+                    <button class="sample-token px-3 py-1 bg-gray-200 text-gray-700 rounded-full text-sm hover:bg-gray-300" 
+                            data-address="DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263" data-symbol="BONK">
+                        BONK - Bonk
+                    </button>
+                    <button class="sample-token px-3 py-1 bg-gray-200 text-gray-700 rounded-full text-sm hover:bg-gray-300" 
+                            data-address="EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm" data-symbol="WIF">
+                        WIF - Dogwifhat
+                    </button>
+                    <button class="sample-token px-3 py-1 bg-gray-200 text-gray-700 rounded-full text-sm hover:bg-gray-300" 
+                            data-address="4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R" data-symbol="RAY">
+                        RAY - Raydium
+                </button>
+                </div>
+            </div>
+
+            <!-- Database Tokens -->
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-medium text-gray-700">Previously Analyzed Tokens:</h3>
+                    <button id="refresh-database-tokens" class="text-xs text-blue-600 hover:text-blue-800">
+                        <i class="fas fa-refresh mr-1"></i>Refresh
+                    </button>
+                </div>
+                <div id="database-tokens-container" class="flex flex-wrap gap-2">
+                    <p class="text-xs text-gray-500">Loading...</p>
+                </div>
+            </div>
+
+            <!-- Error/Success Messages -->
+            <div id="message-container" class="hidden mb-4 p-4 rounded-lg">
+                <p id="message-text"></p>
+            </div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="loading-spinner" class="hidden text-center py-8">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <p class="mt-2 text-gray-600">Analyzing token metrics...</p>
+                        </div>
+
+        <!-- Analytics Results -->
+        <div id="analytics-results" class="hidden">
+            <!-- Token Info -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">📊 Token Overview</h2>
+                
+                <!-- Token Name and Symbol -->
+                <div class="mb-4 text-center">
+                    <h3 id="token-name-display" class="text-2xl font-bold text-gray-800"></h3>
+                    <p id="token-symbol-display" class="text-lg text-gray-600 font-semibold"></p>
+                </div>
+                
+                <!-- Token Image (if available) -->
+                <div class="mb-4 text-center">
+                    <img id="token-image" class="hidden mx-auto w-16 h-16 rounded-lg object-cover border border-gray-200" alt="Token Image">
+                </div>
+                
+                <!-- Token Description (if available) -->
+                <div class="mb-4 text-center hidden">
+                    <p class="text-sm text-gray-600 mb-1">Description</p>
+                    <p id="token-description" class="text-sm text-gray-700 italic max-w-md mx-auto"></p>
+                </div>
+                
+                <!-- External Link (if available) -->
+                <div class="mb-4 text-center">
+                    <a id="token-external-link" href="#" target="_blank" rel="noopener noreferrer" 
+                       class="hidden inline-flex items-center text-sm text-blue-600 hover:text-blue-800">
+                        <i class="fas fa-external-link-alt mr-1"></i>
+                        Visit Project Website
+                    </a>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600">Token Address</p>
+                        <p id="token-address-display" class="font-mono text-xs break-all"></p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600">Decimals</p>
+                        <p id="token-decimals" class="text-sm font-medium"></p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600">Last Updated</p>
+                        <p id="last-updated" class="text-sm"></p>
+                        </div>
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600">Real-time Status</p>
+                        <span id="realtime-status" class="inline-block px-2 py-1 bg-green-100 text-green-800 text-sm rounded-full">
+                            Live Updates Active
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Core Metrics Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Market Cap Card -->
+                <div class="metric-card rounded-lg p-6 card-hover">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">💰 Market Cap</h3>
+                        <i class="fas fa-chart-line text-blue-500"></i>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <p class="text-sm text-gray-600">Current Price</p>
+                            <p id="current-price" class="text-2xl font-bold text-green-600">$0.00</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Market Cap</p>
+                            <p id="market-cap" class="text-xl font-semibold">$0</p>
+                        </div>
+                        <div class="flex justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600">Total Supply</p>
+                                <p id="total-supply" class="font-medium">0</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-600">24h Change</p>
+                                <p id="price-change-24h" class="font-medium">0%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Token Velocity Card -->
+                <div class="metric-card rounded-lg p-6 card-hover">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">⚡ Token Velocity</h3>
+                        <i class="fas fa-tachometer-alt text-orange-500"></i>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <p class="text-sm text-gray-600">Velocity Ratio</p>
+                            <p id="velocity-ratio" class="text-2xl font-bold text-orange-600">0.00</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">24h Volume</p>
+                            <p id="volume-24h" class="text-xl font-semibold">$0</p>
+                        </div>
+                        <div class="flex justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600">Transactions</p>
+                                <p id="transaction-count" class="font-medium">0</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-600">Category</p>
+                                <p id="velocity-category" class="font-medium">-</p>
+                            </div>
+            </div>
+            </div>
+        </div>
+
+                <!-- Concentration Card -->
+                <div class="metric-card rounded-lg p-6 card-hover">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">🏦 Holder Concentration</h3>
+                        <i class="fas fa-users text-purple-500"></i>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <p class="text-sm text-gray-600">Top Holder</p>
+                            <p id="concentration-top1" class="text-2xl font-bold text-purple-600">0%</p>
+                        </div>
+                        <div class="flex justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600">Top 5</p>
+                                <p id="concentration-top5" class="font-medium">0%</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-600">Top 15</p>
+                                <p id="concentration-top15" class="font-medium">0%</p>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Total Holders</p>
+                            <p id="total-holders" class="font-medium">0</p>
+                        </div>
+                        <div class="mt-2 text-xs text-gray-500 border-t pt-2">
+                            <p><strong>Metrics:</strong> Shows concentration for top 1, top 5, and top 15 largest holders based on available data from Helius API.</p>
+                            <p class="mt-1">Provides accurate concentration analysis within API limitations.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Paperhand Analysis Card -->
+                <div class="metric-card rounded-lg p-6 card-hover">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">💎 Holder Behavior</h3>
+                        <i class="fas fa-gem text-indigo-500"></i>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <p class="text-sm text-gray-600">Paperhand Ratio</p>
+                            <p id="paperhand-ratio" class="text-2xl font-bold text-red-600">0%</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Diamond Hand Ratio</p>
+                            <p id="diamond-ratio" class="text-xl font-semibold text-blue-600">0%</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Behavior Category</p>
+                            <p id="behavior-category" class="font-medium">-</p>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-xs text-gray-500 border-t pt-2">
+                        <p id="paperhand-note"><strong>Analysis Note:</strong> Behavioral analysis requires sufficient transaction data.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Updates Feed -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">📡 Live Updates</h3>
+                <div id="live-updates" class="space-y-2 max-h-64 overflow-y-auto">
+                    <p class="text-gray-500 text-sm">Connect to see live updates...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE = window.location.origin + '/api/v1';
+        const WS_URL = `ws://${window.location.host}/ws/tokens`;
+        
+        // State
+        let currentToken = '';
+        let websocket = null;
+        let isLoading = false;
+        
+        // DOM Elements
+        const tokenForm = document.getElementById('token-form');
+        const tokenAddressInput = document.getElementById('token-address');
+        const analyzeBtn = document.getElementById('analyze-btn');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const analyticsResults = document.getElementById('analytics-results');
+        const messageContainer = document.getElementById('message-container');
+        const messageText = document.getElementById('message-text');
+        const wsStatusDot = document.getElementById('ws-status-dot');
+        const wsStatusText = document.getElementById('ws-status-text');
+        const liveUpdates = document.getElementById('live-updates');
+        
+        // Event Listeners
+        tokenForm.addEventListener('submit', handleTokenSubmit);
+        
+        // Sample token buttons
+        document.querySelectorAll('.sample-token').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const address = e.target.dataset.address;
+                const symbol = e.target.dataset.symbol;
+                tokenAddressInput.value = address;
+                analyzeToken(address);
+                });
+        });
+
+        // Database tokens refresh button
+        document.getElementById('refresh-database-tokens').addEventListener('click', loadDatabaseTokens);
+        
+        // Load database tokens on page load
+        loadDatabaseTokens();
+        
+        // Functions
+        async function handleTokenSubmit(e) {
+            e.preventDefault();
+            const tokenAddress = tokenAddressInput.value.trim();
+            
+            if (!tokenAddress || tokenAddress.length < 32) {
+                showMessage('Please enter a valid Solana token address', 'error');
+                return;
+            }
+            
+            await analyzeToken(tokenAddress);
+        }
+        
+        async function analyzeToken(tokenAddress) {
+            if (isLoading) return;
+            
+            setLoading(true);
+            currentToken = tokenAddress;
+            hideMessage();
+
+            try {
+                const maxAccounts = document.getElementById('max-accounts').value || 15;
+                const response = await fetch(`${API_BASE}/tokens/${tokenAddress}/analytics?include_real_time=true&max_accounts_to_monitor=${maxAccounts}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayAnalytics(data.data);
+                    connectWebSocket(tokenAddress, maxAccounts);
+                    showMessage('Analytics loaded successfully!', 'success');
+                } else {
+                    throw new Error(data.message || 'Failed to fetch analytics');
+                }
+                
+            } catch (error) {
+                console.error('Error fetching analytics:', error);
+                showMessage(`Error: ${error.message}`, 'error');
+            } finally {
+                setLoading(false);
+            }
+        }
+        
+        function displayAnalytics(data) {
+            // Update token info
+            const tokenInfo = data.token_info || {};
+            
+            // Token name and symbol
+            const tokenName = tokenInfo.name || 'Unknown Token';
+            const tokenSymbol = tokenInfo.symbol || 'N/A';
+            const tokenDecimals = tokenInfo.decimals || 9;
+            const tokenDescription = tokenInfo.description || null;
+            const tokenImageUrl = tokenInfo.image_url || null;
+            const externalUrl = tokenInfo.external_url || null;
+            
+            document.getElementById('token-name-display').textContent = tokenName;
+            document.getElementById('token-symbol-display').textContent = tokenSymbol ? `($${tokenSymbol})` : '';
+            document.getElementById('token-address-display').textContent = currentToken;
+            document.getElementById('token-decimals').textContent = tokenDecimals;
+            document.getElementById('last-updated').textContent = new Date(data.timestamp).toLocaleString();
+            
+            // Show token description if available
+            const descriptionElement = document.getElementById('token-description');
+            if (tokenDescription && descriptionElement) {
+                descriptionElement.textContent = tokenDescription;
+                descriptionElement.parentElement.classList.remove('hidden');
+            } else if (descriptionElement) {
+                descriptionElement.parentElement.classList.add('hidden');
+            }
+            
+            // Show token image if available
+            const imageElement = document.getElementById('token-image');
+            if (tokenImageUrl && imageElement) {
+                imageElement.src = tokenImageUrl;
+                imageElement.classList.remove('hidden');
+                imageElement.onerror = () => {
+                    imageElement.classList.add('hidden');
+                };
+            } else if (imageElement) {
+                imageElement.classList.add('hidden');
+            }
+            
+            // Show external link if available
+            const externalLinkElement = document.getElementById('token-external-link');
+            if (externalUrl && externalLinkElement) {
+                externalLinkElement.href = externalUrl;
+                externalLinkElement.classList.remove('hidden');
+            } else if (externalLinkElement) {
+                externalLinkElement.classList.add('hidden');
+            }
+            
+            // Update page title with token name
+            if (tokenName !== 'Unknown Token') {
+                document.title = `${tokenName} (${tokenSymbol}) - Trojan Trading Analytics`;
+            }
+            
+            // Market Cap
+            const marketCap = data.market_cap || {};
+            document.getElementById('current-price').innerHTML = formatMetricValue(marketCap.current_price_usd, 'currency', 6);
+            document.getElementById('market-cap').innerHTML = formatMetricValue(marketCap.market_cap_usd, 'currency');
+            document.getElementById('total-supply').innerHTML = formatMetricValue(marketCap.circulating_supply, 'number');
+            document.getElementById('price-change-24h').innerHTML = formatMetricValue(marketCap.price_change_24h_percent, 'percentage');
+            
+            // Velocity
+            const velocity = data.velocity || {};
+            document.getElementById('velocity-ratio').innerHTML = formatMetricValue(velocity.velocity_ratio, 'decimal');
+            document.getElementById('volume-24h').innerHTML = formatMetricValue(velocity.volume_24h_usd, 'currency');
+            document.getElementById('transaction-count').innerHTML = formatMetricValue(velocity.transaction_count_24h, 'number', 0);
+            document.getElementById('velocity-category').textContent = velocity.velocity_category || '-';
+            
+            // Concentration
+            const concentration = data.concentration || {};
+            const ratios = concentration.concentration_ratios || {};
+            const dataQuality = concentration.data_quality || 'unknown';
+            
+            // Update concentration display with new metrics
+            document.getElementById('concentration-top1').innerHTML = formatConcentrationValue(ratios.top_1, dataQuality, false);
+            document.getElementById('concentration-top5').innerHTML = formatConcentrationValue(ratios.top_5, dataQuality, false);
+            document.getElementById('concentration-top15').innerHTML = formatConcentrationValue(ratios.top_15, dataQuality, false);
+            
+            // Update total holders with data quality indicator
+            const holdersText = formatMetricValue(concentration.total_holders, 'number', 0);
+            const holdersNote = concentration.available_top_accounts ? ` (top ${concentration.available_top_accounts} available)` : '';
+            document.getElementById('total-holders').innerHTML = holdersText + '<span class="text-gray-400 text-xs">' + holdersNote + '</span>';
+            
+            // Paperhand
+            const paperhand = data.paperhand || {};
+            document.getElementById('paperhand-ratio').innerHTML = formatMetricValue(paperhand.paperhand_ratio_percent, 'percentage');
+            document.getElementById('diamond-ratio').innerHTML = formatMetricValue(paperhand.diamond_hand_ratio_percent, 'percentage');
+            document.getElementById('behavior-category').textContent = paperhand.behavior_category || '-';
+            
+            // Update paperhand analysis note with specific information
+            const paperhandNote = document.getElementById('paperhand-note');
+            if (paperhand.analysis_note) {
+                paperhandNote.innerHTML = `<strong>Analysis:</strong> ${paperhand.analysis_note}`;
+            } else if (paperhand.error) {
+                paperhandNote.innerHTML = `<strong>Note:</strong> ${paperhand.error}`;
+            } else {
+                paperhandNote.innerHTML = '<strong>Analysis Note:</strong> Behavioral analysis requires sufficient transaction data.';
+            }
+            
+            // Show results
+            analyticsResults.classList.remove('hidden');
+        }
+        
+        function connectWebSocket(tokenAddress, maxAccounts = 15) {
+            if (websocket) {
+                websocket.close();
+            }
+            
+            try {
+                websocket = new WebSocket(`${WS_URL}/${tokenAddress}`);
+                
+                websocket.onopen = () => {
+                    updateWebSocketStatus('connected');
+                    console.log('WebSocket connected, sending subscription message');
+                    
+                    // Send initial subscription message with max_accounts_to_monitor parameter
+                    websocket.send(JSON.stringify({
+                        max_accounts_to_monitor: parseInt(maxAccounts)
+                    }));
+                };
+                
+                websocket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    } catch (e) {
+                        console.error('Error parsing WebSocket message:', e);
+                    }
+                };
+                
+                websocket.onclose = () => {
+                    updateWebSocketStatus('disconnected');
+                    console.log('WebSocket disconnected');
+                };
+                
+                websocket.onerror = (error) => {
+                    updateWebSocketStatus('error');
+                    console.error('WebSocket error:', error);
+                };
+                
+                } catch (error) {
+                console.error('WebSocket connection error:', error);
+                updateWebSocketStatus('error');
+                }
+            }
+
+        function handleWebSocketMessage(data) {
+            if (data.type === 'initial_data') {
+                // Initial data already handled by REST API
+                console.log('Received initial WebSocket data');
+                return;
+            }
+
+            if (data.type === 'subscription_confirmed') {
+                console.log(`WebSocket subscription confirmed for ${data.token_mint} with ${data.max_accounts_to_monitor} accounts`);
+                addLiveUpdate({
+                    type: 'subscription_status',
+                    message: `Monitoring ${data.max_accounts_to_monitor} largest accounts`
+                });
+                return;
+            }
+
+            if (data.type === 'token_update') {
+                addLiveUpdate(data);
+            }
+            
+            if (data.type === 'error') {
+                console.error('WebSocket error:', data.message);
+                showMessage(`WebSocket Error: ${data.message}`, 'error');
+                return;
+            }
+            
+            // Handle ping/pong
+            if (data.type === 'ping') {
+                websocket.send(JSON.stringify({type: 'pong'}));
+            }
+        }
+        
+        function addLiveUpdate(data) {
+            const timestamp = new Date().toLocaleTimeString();
+            const updateElement = document.createElement('div');
+            
+            let message = '';
+            let borderColor = 'border-blue-500';
+            
+            if (data.type === 'account_update') {
+                message = `Account balance changed: ${data.balance?.toFixed(4) || 'N/A'}`;
+            } else if (data.type === 'transaction_update') {
+                message = `New transaction: ${data.status}`;
+            } else if (data.type === 'subscription_status') {
+                message = data.message || 'Subscription status update';
+                borderColor = 'border-green-500';
+            } else {
+                message = `Update: ${data.type}`;
+            }
+            
+            updateElement.className = `p-2 bg-gray-50 rounded text-sm border-l-2 ${borderColor}`;
+            updateElement.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <span>${message}</span>
+                    <span class="text-gray-400">${timestamp}</span>
+                    </div>
+                `;
+            
+            liveUpdates.insertBefore(updateElement, liveUpdates.firstChild);
+            
+            // Keep only last 10 updates
+            while (liveUpdates.children.length > 10) {
+                liveUpdates.removeChild(liveUpdates.lastChild);
+            }
+        }
+        
+        function updateWebSocketStatus(status) {
+            const statusMap = {
+                connected: { dot: 'bg-green-400 pulse-dot', text: 'WebSocket Live' },
+                disconnected: { dot: 'bg-yellow-400', text: 'WebSocket Offline' },
+                error: { dot: 'bg-red-400', text: 'WebSocket Error' }
+            };
+            
+            const config = statusMap[status] || statusMap.disconnected;
+            wsStatusDot.className = `w-3 h-3 rounded-full mr-2 ${config.dot}`;
+            wsStatusText.textContent = config.text;
+        }
+        
+        function setLoading(loading) {
+            isLoading = loading;
+            analyzeBtn.disabled = loading;
+            analyzeBtn.textContent = loading ? 'Analyzing...' : 'Analyze';
+            
+            if (loading) {
+                loadingSpinner.classList.remove('hidden');
+                analyticsResults.classList.add('hidden');
+            } else {
+                loadingSpinner.classList.add('hidden');
+            }
+        }
+        
+        function showMessage(message, type) {
+            messageText.textContent = message;
+            messageContainer.className = `mb-4 p-4 rounded-lg ${type === 'error' ? 'error' : 'success'}`;
+            messageContainer.classList.remove('hidden');
+            
+            // Auto-hide success messages
+            if (type === 'success') {
+                setTimeout(() => {
+                    hideMessage();
+                }, 3000);
+            }
+        }
+        
+        function hideMessage() {
+            messageContainer.classList.add('hidden');
+            }
+        
+        function formatCurrency(value) {
+            if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
+            if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
+            if (value >= 1e3) return `$${(value / 1e3).toFixed(2)}K`;
+            return `$${value.toFixed(2)}`;
+        }
+        
+        function formatNumber(value) {
+            if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+            if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+            if (value >= 1e3) return `${(value / 1e3).toFixed(2)}K`;
+            return value.toLocaleString();
+        }
+        
+        // Add utility function for better number formatting and NULL handling
+        function formatMetricValue(value, type = 'number', decimals = 2) {
+            // Handle NULL, undefined, or empty string values
+            if (value === null || value === undefined || value === '') {
+                return '<span class="text-gray-400">N/A</span>';
+            }
+            
+            // Handle zero values - show as 0, not N/A
+            if (value === 0) {
+                switch (type) {
+                    case 'percentage':
+                        return '0%';
+                    case 'currency':
+                        return '$0.00';
+                    case 'number':
+                        return '0';
+                    case 'decimal':
+                        return '0.00';
+                    default:
+                        return '0';
+                }
+            }
+            
+            // Handle very small numbers in scientific notation
+            if (typeof value === 'number' && Math.abs(value) < 0.001 && value !== 0) {
+                return '<span class="text-gray-400">~0</span>';
+            }
+            
+            switch (type) {
+                case 'percentage':
+                    return `${value.toFixed(decimals)}%`;
+                case 'currency':
+                    return formatCurrency(value);
+                case 'number':
+                    return formatNumber(value);
+                case 'decimal':
+                    return value.toFixed(decimals);
+                default:
+                    return value.toString();
+            }
+        }
+        
+        // Add function to handle concentration display with data quality info
+        function formatConcentrationValue(value, dataQuality = null, isEstimate = false) {
+            if (value === null || value === undefined) {
+                if (dataQuality === 'insufficient') {
+                    return '<span class="text-gray-400" title="Insufficient data available">N/A</span>';
+                } else {
+                    return '<span class="text-gray-400" title="Data not available due to API limitations">Limited*</span>';
+                }
+            }
+            
+            const formatted = `${value.toFixed(1)}%`;
+            if (isEstimate) {
+                return `<span title="Estimated based on available data">${formatted}*</span>`;
+            }
+            return formatted;
+        }
+
+        async function loadDatabaseTokens() {
+            try {
+                const response = await fetch(`${API_BASE}/tokens/database`);
+                const data = await response.json();
+                
+                const container = document.getElementById('database-tokens-container');
+                
+                if (data.success && data.tokens && data.tokens.length > 0) {
+                    container.innerHTML = '';
+                    
+                    data.tokens.slice(0, 10).forEach(token => { // Show only first 10
+                        const tokenButton = document.createElement('button');
+                        tokenButton.className = 'database-token px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm hover:bg-blue-200 transition-colors';
+                        
+                        const displayName = token.name || token.symbol || 'Unknown';
+                        const displaySymbol = token.symbol ? ` (${token.symbol})` : '';
+                        const hasMetrics = token.has_recent_metrics ? '✓' : '';
+                        
+                        tokenButton.innerHTML = `${hasMetrics} ${displayName}${displaySymbol}`;
+                        tokenButton.dataset.address = token.address;
+                        tokenButton.title = `Address: ${token.address}\nLast Updated: ${token.updated_at ? new Date(token.updated_at).toLocaleDateString() : 'Never'}\nHas Metrics: ${token.has_recent_metrics ? 'Yes' : 'No'}`;
+                        
+                        tokenButton.addEventListener('click', () => {
+                            tokenAddressInput.value = token.address;
+                            analyzeToken(token.address);
+                        });
+                        
+                        container.appendChild(tokenButton);
+                    });
+                    
+                    // Add stats info
+                    if (data.tokens.length > 10) {
+                        const moreInfo = document.createElement('span');
+                        moreInfo.className = 'text-xs text-gray-500 px-2 py-1';
+                        moreInfo.textContent = `+${data.tokens.length - 10} more`;
+                        container.appendChild(moreInfo);
+                    }
+                    
+                    // Add stats
+                    const statsInfo = document.createElement('div');
+                    statsInfo.className = 'text-xs text-gray-500 mt-2';
+                    statsInfo.innerHTML = `
+                        <span class="mr-4">Total: ${data.total_count}</span>
+                        <span class="mr-4">With Names: ${data.has_names}</span>
+                        <span class="mr-4">With Symbols: ${data.has_symbols}</span>
+                        <span>With Metrics: ${data.has_recent_metrics}</span>
+                    `;
+                    container.appendChild(statsInfo);
+                    
+                } else {
+                    container.innerHTML = '<p class="text-xs text-gray-500">No tokens found in database</p>';
+                }
+                
+            } catch (error) {
+                console.error('Error loading database tokens:', error);
+                document.getElementById('database-tokens-container').innerHTML = 
+                    '<p class="text-xs text-red-500">Error loading tokens</p>';
+            }
+        }
+
+        // Initialize
+        updateWebSocketStatus('disconnected');
+    </script>
+</body>
+</html> 
